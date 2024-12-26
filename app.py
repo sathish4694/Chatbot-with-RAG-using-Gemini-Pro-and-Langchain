@@ -2,16 +2,12 @@ import streamlit as st
 from main import get_webpage_text, get_text_chunks, get_vector_store, get_conversational_chain
 
 # Set page configuration
-st.set_page_config(page_title="RAG Chat Bot", page_icon="📚", layout="centered")
+st.set_page_config(page_title="RAG Chat Bot", page_icon="🤖", layout="wide")
 
-
+# Inject custom styles
 st.markdown("""
     <style>
-        .main-container {
-            background-color: #f0f8ff; /* Alice blue background */
-            padding: 30px;
-            border-radius: 15px;
-            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
+        body {
             font-family: 'Arial', sans-serif;
         }
 
@@ -41,47 +37,76 @@ st.markdown("""
             border-color: #004d40; /* Darker teal border on focus */
             box-shadow: 0 0 8px rgba(0, 77, 64, 0.5);
         }
+        .response-box {
+            margin-top: 20px;
+            padding: 20px;
+            background-color: #f1f8e9; /* Light green background */
+            border-radius: 8px;
+            border: 1px solid #c5e1a5; /* Green border */
+            font-size: 16px;
+        }
     </style>
 """, unsafe_allow_html=True)
 
-def user_input(user_question):
-    """
-    Handles user input and displays the conversation history.
+# Initialize session state
+if "conversation" not in st.session_state:
+    st.session_state.conversation = None
 
-    Args:
-        user_question: The question entered by the user.
-    """
-    response = st.session_state.conversation({'question': user_question})
-    st.session_state.chatHistory = response['chat_history']
-    for i, message in enumerate(st.session_state.chatHistory):
-        if i % 2 == 0:
-            st.write("**User:**", message.content)
-        else:
-            st.write("**Reply:**", message.content)
+def validate_urls(urls):
+    """Validates the provided URLs."""
+    import re
+    valid_urls = [url for url in urls if re.match(r'^https?://', url)]
+    if len(valid_urls) < len(urls):
+        st.warning("Some URLs were invalid and skipped.")
+    return valid_urls
 
 def main():
-    """
-    Main function to execute the Streamlit application.
-    """
-    # Display logo and title
-
-    st.title("RAG Q&A Chat Bot")
+    """Main function to run the Streamlit application."""
+    st.title("🤖 RAG Q&A Chat Bot")
+    st.subheader("Interactive chatbot powered by Retrieval-Augmented Generation (RAG).")
+    st.markdown(
+        """
+        Enter URLs below. The bot will analyze the content and be ready to answer your questions!
+        """,
+        unsafe_allow_html=True,
+    )
 
     # Input URLs
-    urls = st.text_area("Enter URLs:").splitlines()
-    
-    if st.button("Process"):
-        with st.spinner("Processing..."):
-            text = get_webpage_text(urls)
-            text_chunks = get_text_chunks(text)
-            vector_store = get_vector_store(text_chunks)
-            st.session_state.conversation = get_conversational_chain(vector_store)
-            st.success("Processing complete!")
+    urls = st.text_area(
+        "Enter URLs:",
+        placeholder="Paste one URL per line here...",
+        height=70,
+    ).splitlines()
+    urls = validate_urls(urls)
 
-    # User input
-    user_question = st.text_input("Ask a question:")
-    if user_question:
-        user_input(user_question)
+    if st.button("Process"):
+        with st.spinner("Analyzing content..."):
+            try:
+                text = get_webpage_text(urls)
+                text_chunks = get_text_chunks(text)
+                vector_store = get_vector_store(text_chunks)
+                st.session_state.conversation = get_conversational_chain(vector_store)
+                st.success("Processed! You can now ask questions.")
+            except Exception as e:
+                st.error(f"Error processing URLs: {e}")
+
+    # User question input
+    st.markdown("### Ask Your Question")
+    user_question = st.text_input(
+        "Type your question below:",
+        placeholder="What would you like to know?",
+    )
+
+    if user_question and st.session_state.conversation:
+        try:
+            response = st.session_state.conversation({"question": user_question})
+            bot_reply = response["chat_history"][-1].content
+            st.markdown(
+                f"<div class='response-box'><strong>Bot's Answer:</strong><br>{bot_reply}</div>",
+                unsafe_allow_html=True,
+            )
+        except Exception as e:
+            st.error(f"Error during conversation: {e}")
 
 if __name__ == "__main__":
     main()
